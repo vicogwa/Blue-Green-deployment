@@ -1,0 +1,64 @@
+# nginx.conf.template
+# Will be rendered by entrypoint.sh via envsubst
+
+worker_processes  1;
+error_log  /var/log/nginx/error.log info;
+pid        /var/run/nginx.pid;
+
+events { worker_connections 1024; }
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    sendfile        on;
+    tcp_nopush      on;
+    keepalive_timeout  65;
+
+    # Upstream config: primary and backup
+    upstream app_pool {
+        # Primary depends on ACTIVE_POOL being 'blue' or 'green'.
+        # We feed host and port via envsubst
+        # primary server
+        server ${ACTIVE_POOL}_host_placeholder:${ACTIVE_POOL}_port_placeholder max_fails=1 fail_timeout=5s;
+        # backup server (the other color)
+        server ${ACTIVE_POOL}_backup_host_placeholder:${ACTIVE_POOL}_backup_port_placeholder backup;
+    }
+
+    server {
+        listen 80;
+
+        # client timeouts - keep each request below 10s end-to-end
+        client_body_timeout 5s;
+        client_header_timeout 5s;
+        send_timeout 5s;
+
+        location / {
+            # Proxy to upstream group
+            proxy_pass http://app_pool;
+
+            # Timeouts for connecting/reading upstream - keep them short so failover is quick
+            proxy_connect_timeout 1s;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 2s;
+
+            # Allow retrying on these error types within the same client request
+            proxy_next_upstream error timeout http_502 http_503 http_504 http_500;
+            proxy_next_upstream_tries 2;
+             proxy_next_upstream_timeout 10s;
+
+            # preserve original Host and basic headers
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # forward specified response headers from upstream to the client unchanged
+            proxy_pass_header X-App-Pool;
+            proxy_pass_header X-Release-Id;
+
+            # Ensure large bodies are okay (if needed)
+            proxy_buffering off; 
+        }    
+   }
+}

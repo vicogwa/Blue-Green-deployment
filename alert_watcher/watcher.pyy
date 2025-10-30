@@ -1,0 +1,62 @@
+import os
+import time
+import json
+import requests
+from collections import deque
+
+LOG_FILE = "/var/log/nginx/access.log"
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+ERROR_RATE_THRESHOLD = float(os.getenv("ERROR_RATE_THRESHOLD", 2))
+WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", 200))
+ALERT_COOLDOWN_SEC = int(os.getenv("ALERT_COOLDOWN_SEC", 300))
+
+last_pool = None
+last_alert_time = 0
+window = deque(maxlen=WINDOW_SIZE)
+
+def post_slack_message(text):
+    if not SLACK_WEBHOOK_URL:
+        print("⚠️ Slack webhook not configured")
+        return
+    payload = {"text": text}
+    requests.post(SLACK_WEBHOOK_URL, data=json.dumps(payload), headers={"Content-Type": "application/json"})
+
+def tail_log(filename):
+    with open(filename, "r") as f:
+        f.seek(0, 2)
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(1)
+                continue
+            yield line.strip()
+
+def main():
+    global last_pool, last_alert_time
+    print("🚀 Starting log watcher...")
+    for line in tail_log(LOG_FILE):
+        if "pool=" not in line:
+            continue
+
+        parts = dict(item.split("=") for item in line.split() if "=" in item)
+        pool = parts.get("pool", "-")
+        status = parts.get("upstream_status", "0")
+
+        if last_pool and pool != last_pool:
+            msg = f"⚠️ Failover detected! Pool switched from *{last_pool}* ➜ *{pool}*"
+            post_slack_message(msg)
+            last_alert_time = time.time()
+        last_pool = pool
+
+        is_error = status.startswith("5")
+        window.append(is_error)
+        error_rate = (sum(window) / len(window)) * 100
+
+        now = time.time()
+        if error_rate > ERROR_RATE_THRESHOLD and (now - last_alert_time) > ALERT_COOLDOWN_SEC:
+            msg = f"🔥 High error rate detected: {error_rate:.2f}% (Threshold: {ERROR_RATE_THRESHOLD}%)"
+            post_slack_message(msg)
+            last_alert_time = now
+
+if __name__ == "__main__":
+    main()
