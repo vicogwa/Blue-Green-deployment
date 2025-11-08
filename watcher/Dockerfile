@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY watcher.py .
+COPY alert_watcher.py .
 
-RUN pip install --no-cache-dir requests python-dateutil
+RUN pip install --no-cache-dir requests
 
-CMD ["python", "-u", "watcher.py"]
+CMD ["python", "-u", "alert_watcher.py"]
