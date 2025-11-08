@@ -6,4 +6,4 @@ COPY alert_watcher.py .
 
 RUN pip install --no-cache-dir requests
 
-CMD ["python", "-u", "alert_watcher.py"]
+CMD ["python", "-u", "watcher.py"]
