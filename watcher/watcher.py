@@ -31,7 +31,7 @@ def send_slack_alert(title, text, extra=None):
     except Exception as e:
         print(f"Failed to send Slack alert: {e}", flush=True)
 
-print(f"Starting alert watcher...", flush=True)
+print(f"Starting watcher...", flush=True)
 print(f"LOG_FILE: {LOG_FILE}", flush=True)
 print(f"ACTIVE_POOL: {ACTIVE_POOL}", flush=True)
 print(f"ERROR_RATE_THRESHOLD: {ERROR_RATE_THRESHOLD}%", flush=True)
