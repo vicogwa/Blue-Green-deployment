@@ -26,10 +26,9 @@ echo "  Backup: ${BACKUP}"
 cat > /etc/nginx/conf.d/default.conf <<'EOF'
 log_format custom '$remote_addr - $remote_user [$time_local] '
                   '"$request" $status $body_bytes_sent '
-                  'pool=$upstream_http_x_app_pool '
+                  'pool=$upstream_addr '
                   'release=$upstream_http_x_release_id '
                   'upstream_status=$upstream_status '
-                  'upstream_addr=$upstream_addr '
                   'request_time=$request_time '
                   'upstream_response_time=$upstream_response_time';
 
@@ -41,30 +40,30 @@ upstream backend {
 server {
     listen 80;
     server_name localhost;
-
+    
     access_log /var/log/nginx/access.log custom;
     error_log /var/log/nginx/error.log info;
-
+    
     location / {
         proxy_pass http://backend;
         proxy_http_version 1.1;
-
+        
         proxy_connect_timeout 2s;
         proxy_send_timeout 2s;
         proxy_read_timeout 2s;
-
+        
         proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
         proxy_next_upstream_tries 2;
         proxy_next_upstream_timeout 10s;
-
+        
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
+        
         proxy_pass_header X-App-Pool;
         proxy_pass_header X-Release-Id;
-
+        
         proxy_buffering off;
     }
 }
